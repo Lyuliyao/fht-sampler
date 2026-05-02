@@ -143,8 +143,8 @@ posted, and replaced with an `@article` entry on publication.)*
 
 ## License
 
-*(Add a LICENSE file — MIT or Apache-2.0 are common choices for academic
-code releases.)*
+Released under the [Apache License 2.0](LICENSE).
+Copyright © 2026 Liyao Lyu, Siyu Guo, Huan Lei.
 
 ## Contact
 
