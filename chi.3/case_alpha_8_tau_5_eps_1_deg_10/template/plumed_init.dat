@@ -1,0 +1,26 @@
+# vim:ft=plumed
+# since simulation run in subdir, we refer to a file in the parent dir:
+dih-001-00: TORSION ATOMS=6,1,7,8 
+dih-001-01: TORSION ATOMS=1,7,8,11
+dih-001-02: TORSION ATOMS=7,8,11,30 
+dih-002-00: TORSION ATOMS=8,11,30,31
+dih-002-01: TORSION ATOMS=11,30,31,34 
+dih-002-02: TORSION ATOMS=30,31,34,53 
+dih-003-00: TORSION ATOMS=31,34,53,54 
+dih-003-01: TORSION ATOMS=34,53,54,57 
+dih-003-02: TORSION ATOMS=53,54,57,76 
+
+METAD ...
+  LABEL=metad
+  ARG=dih-001-00
+  PACE=5000
+  HEIGHT=0.0
+  SIGMA=0.35
+  TEMP=300
+  BIASFACTOR=10.0
+  GRID_MIN=-pi
+  GRID_MAX=pi
+  GRID_BIN=80
+  CALC_RCT
+... METAD
+PRINT STRIDE=200 ARG=dih-001-00,dih-001-01,dih-001-02,dih-002-00,dih-002-01,dih-002-02,dih-003-00,dih-003-01,dih-003-02,metad.bias FILE=COLVAR 

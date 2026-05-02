@@ -1,0 +1,53 @@
+# vim:ft=plumed
+# since simulation run in subdir, we refer to a file in the parent dir:
+MOLINFO STRUCTURE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1UAO/case1/template/processed.pdb
+
+# ---------- Backbone torsions (example: residues 2-9) ----------
+phi2: TORSION ATOMS=@phi-2
+psi2: TORSION ATOMS=@psi-2
+phi3: TORSION ATOMS=@phi-3
+psi3: TORSION ATOMS=@psi-3
+phi4: TORSION ATOMS=@phi-4
+psi4: TORSION ATOMS=@psi-4
+phi5: TORSION ATOMS=@phi-5
+psi5: TORSION ATOMS=@psi-5
+phi6: TORSION ATOMS=@phi-6
+psi6: TORSION ATOMS=@psi-6
+phi7: TORSION ATOMS=@phi-7
+psi7: TORSION ATOMS=@psi-7
+phi8: TORSION ATOMS=@phi-8
+psi8: TORSION ATOMS=@psi-8
+phi9: TORSION ATOMS=@phi-9
+psi9: TORSION ATOMS=@psi-9
+
+calpha: GROUP NDX_FILE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1UAO/case1/template/index.ndx NDX_GROUP=CA
+ca1:  GROUP NDX_FILE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1UAO/case1/template/index.ndx NDX_GROUP=r_1_&_CA
+ca10: GROUP NDX_FILE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1UAO/case1/template/index.ndx NDX_GROUP=r_10_&_CA
+
+
+# ---------- Radius of gyration ----------
+rg: GYRATION ATOMS=calpha
+
+# ---------- End-to-end distance (Cα of residue 1 and 10) ----------
+e2e: DISTANCE ATOMS=ca1,ca10
+
+# ---------- Cα-RMSD to native ----------
+# Use optimal alignment; TYPE=OPTIMAL aligns and computes RMSD.
+rmsd_ca: RMSD REFERENCE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1UAO/case1/template/ref_ca.pdb TYPE=OPTIMAL
+
+d1: DISTANCE ATOMS=31,92
+d2: DISTANCE ATOMS=31,106
+METAD ...
+  LABEL=metad
+  ARG=phi2
+  PACE=5000
+  HEIGHT=0.0
+  SIGMA=0.35
+  TEMP=300
+  BIASFACTOR=10.0
+  GRID_MIN=-pi
+  GRID_MAX=pi
+  GRID_BIN=80
+  CALC_RCT
+... METAD
+PRINT STRIDE=1000 ARG=phi2,psi2,phi3,psi3,phi4,psi4,phi5,psi5,phi6,psi6,phi7,psi7,phi8,psi8,phi9,psi9,rg,e2e,rmsd_ca,d1,d2,metad.bias FILE=COLVAR 

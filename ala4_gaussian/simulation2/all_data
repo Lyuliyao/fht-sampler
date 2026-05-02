@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE="/anvil/scratch/x-lyuliyao/meta_bias/ala4_gaussian/compare/simulation2"
+OUT="$BASE/ALL_COLVAR"
+TMP="$BASE/.ALL_COLVAR.tmp"
+
+mapfile -t files < <(find "$BASE" -maxdepth 2 -type f -path '*/sim_*/COLVAR' | sort)
+if [[ ${#files[@]} -eq 0 ]]; then
+  echo "ERROR: no COLVAR files found under $BASE" >&2
+  exit 1
+fi
+
+cp "${files[0]}" "$TMP"
+for f in "${files[@]:1}"; do
+  awk '!/^#/' "$f" >> "$TMP"
+done
+mv "$TMP" "$OUT"
+
+echo "DONE: $OUT"
+echo "merged_files=${#files[@]}"
+wc -l "$OUT"
+
+echo "missing COLVAR in:"
+for d in "$BASE"/sim_*; do
+  [[ -d "$d" ]] || continue
+  [[ -f "$d/COLVAR" ]] || basename "$d"
+done | sort

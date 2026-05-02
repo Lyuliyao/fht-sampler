@@ -1,0 +1,52 @@
+#!/bin/bash
+## FILENAME:  myjobsubmissionfile
+#
+#SBATCH -A mth210005       # allocation name
+#SBATCH -n 64
+#SBATCH --time=48:00:00   # Total run time limit (hh:mm:ss)
+#SBATCH -J myjobname     # Job name
+#SBATCH -p shared     # Queue (partition) name
+#SBATCH --mail-user=useremailaddress
+#SBATCH --mail-type=all   # Send email to above address at begin and end of job
+
+
+
+
+ml anaconda
+source /anvil/scratch/x-lyuliyao/plumed_tensor/plumed-2.9.4/sourceme.sh
+source ~/gromacs-2024.4/bin/GMXRC
+conda activate pytorch
+
+
+export GMX_MAXBACKUP=-1
+export OMP_NUM_THREADS=1
+
+total_iter=20
+nwalkers=32
+walkers=$(seq -f "w%02g" 1 $nwalkers)
+collection_dirs=$(realpath ../run$iters/bins)
+cp ../template/*.cpp ./
+plumed mklib MetaTensor.cpp     # 生成 MetaTensor.so  (文档示例就是这样) :contentReference[oaicite:4]{index=4}
+for w in $walkers; do
+  mkdir -p $w
+  cp ../template/plumed_tensor.dat $w/
+  cp ../template/*.mdp $w/
+  cp ../template/*.top $w/
+  cp ../template/*.gro $w/
+  cp MetaTensor.so $w/
+  # 生成每个 walker 的 modified.dat（注意：绝对路径）
+  # sed -e "s|\${1}|$collection_dirs|g" $w/plumed_tensor.dat > $w/modified.dat
+  cp modified.dat $w/
+done
+
+cp ../template/sketching.py ./
+cp ../template/MetaTensor.cpp ./   # 如果你是 runtime 编译/检查用
+
+
+for w in $walkers; do
+  ( cd $w && \
+    mpirun -n 1 gmx_mpi grompp -f minim.mdp -c conf.gro -p topol.top -o em.tpr && \
+    mpirun -n 1 gmx_mpi mdrun  -v -deffnm em -plumed modified.dat -ntomp 1 -c em.gro && \
+    mpirun -n 1 gmx_mpi grompp -f md.mdp -c em.gro -p topol.top -o md.tpr )
+done
+mpirun -n 64 gmx_mpi mdrun -multidir $walkers -s md.tpr -plumed modified.dat -ntomp 1 -nsteps 10000000

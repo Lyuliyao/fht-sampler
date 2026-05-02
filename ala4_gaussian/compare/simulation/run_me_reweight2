@@ -1,0 +1,27 @@
+#!/bin/bash
+## FILENAME:  myjobsubmissionfile
+#
+#SBATCH -A mth210005       # allocation name
+#SBATCH --nodes=1
+#SBATCH -n 8
+#SBATCH --time=48:00:00   # Total run time limit (hh:mm:ss)
+#SBATCH -J myjobname     # Job name
+#SBATCH -p shared     # Queue (partition) name
+#SBATCH --mail-user=useremailaddress
+#SBATCH --mail-type=all   # Send email to above address at begin and end of job
+
+
+
+set -euo pipefail
+
+ml anaconda
+set +u
+source /anvil/scratch/x-lyuliyao/plumed_tensor/plumed-2.9.4/sourceme.sh
+source ~/gromacs-2024.4/bin/GMXRC
+set -u
+
+
+export GMX_MAXBACKUP=-1
+export OMP_NUM_THREADS=1
+
+plumed driver --noatoms --plumed plumed_rwt.dat

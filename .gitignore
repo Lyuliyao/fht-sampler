@@ -1,0 +1,48 @@
+# OS / editor
+.DS_Store
+._*
+.idea/
+.vscode/
+
+# Python / Jupyter
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Build artifacts
+*.o
+*.so
+*.a
+*.dylib
+
+# Molecular dynamics outputs
+*.edr
+*.tpr
+*.trr
+*.xtc
+*.cpt
+*.log
+*.sbatch
+*.out
+*.err
+*.ok
+*.fail
+*.lock
+
+# Large generated data
+**/ALL_COLVAR*
+**/COLVAR
+**/COLVAR.*
+**/COLVAR.npy
+**/bins/
+**/state/
+**/run*/
+**/w*/
+**/sim_*/
+muller/Data/*/results.npz
+muller/Data/*/unbiased_traj.npz
+
+# Archives
+*.zip
+*.tar
+*.tgz

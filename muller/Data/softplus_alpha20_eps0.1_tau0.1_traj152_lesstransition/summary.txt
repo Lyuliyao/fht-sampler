@@ -1,0 +1,28 @@
+============================================================
+Softplus+Sketch Gaussian Basis Reweighting Results
+============================================================
+
+folder: /mnt/scratch/guosiyu1/Fokker_Planck_fht/Output/muller_gau_softplus_sketch_parameter/output_gau_softplus_sketch_4683722_kbt2.5_deg15_rank15_sketch10_sigma0.2_alpha20_eps0.1_tau0.1
+traj_iter: 152
+bias_from_iter: 151
+n_steps: 6000000
+dt: 0.0005
+kBT: 2.5
+alpha: 20.0
+eps: 0.1
+tau: 0.1
+gamma: 5.0
+deg: 15
+sigma: 0.2
+rank: 15
+sketch: 10
+seed: 42
+n_A_to_B: 74
+n_B_to_A: 74
+ess: 1125318.2699926763
+ess_ratio: 0.1875530449987794
+p_left_theory: 0.9999997930750087
+p_left_reweight: 0.9999998511976477
+fes_rmse: 1.413886316278831
+fes_mae: 0.896676527869163
+timestamp: 2026-03-31 14:10:17

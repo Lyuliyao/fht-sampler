@@ -1,0 +1,130 @@
+#!/bin/bash
+#SBATCH -n 64
+#SBATCH -p RM-shared
+#SBATCH -t 48:00:00
+
+ml anaconda3
+ml openmpi
+conda activate pytorch
+source /ocean/projects/mth210003p/lyuliyao/plumed/plumed-2.9.4/sourceme.sh
+source ~/gromacs2024.4//bin/GMXRC
+export GMX_MAXBACKUP=-1
+export OMP_NUM_THREADS=1
+total_iter=32
+nwalkers=8
+discard_n=10
+
+walkers=$(seq -f "w%02g" 1 $nwalkers)
+state_dir=$(realpath ./state)
+mkdir -p "$state_dir"
+
+# 初始化 state：第一次从 template 的 conf.gro
+for w in $walkers; do
+  mkdir -p "$state_dir/$w"
+  cp ./template/conf.gro "$state_dir/$w/conf.gro"
+done 
+
+mkdir run1
+cd run1
+for w in $walkers; do
+  mkdir -p $w
+  cp ../template/plumed_init.dat $w/plumed.dat
+  cp ../template/sketching.py ./
+  cp ../template/*.mdp $w/
+  cp ../template/*.top $w/
+  cp "$state_dir/$w/conf.gro" $w/conf.gro
+done
+for w in $walkers; do
+  ( cd $w && \
+    srun -n 1 gmx_mpi grompp -f minim.mdp -c conf.gro -p topol.top -o em.tpr -maxwarn 3 && \
+    srun -n 1 gmx_mpi mdrun  -v -deffnm em -ntomp 1 -c em.gro && \
+    srun -n 1 gmx_mpi grompp -f md.mdp -c em.gro -p topol.top -o md.tpr -maxwarn 3 )
+done
+
+mpirun -n 64 gmx_mpi mdrun -multidir $walkers -s md.tpr -plumed plumed.dat -ntomp 1 -nsteps 1000000 -c md_final.gro
+
+first=$(ls -1t w01/COLVAR* | head -n 1)
+
+rm -f COLVAR
+grep '^#!' "$first" > COLVAR
+
+head -n 1 w01/COLVAR.0 > COLVAR
+for w in $walkers; do
+  f=$(ls -1t "$w"/COLVAR* | head -n 1)
+  awk -v skip="$discard_n" '
+    /^#/ { next }
+    {
+      n++
+      if (n <= skip) next
+      if (seen) print prev
+      prev = $0
+      seen = 1
+    }
+  ' "$f" >> COLVAR
+done
+for w in $walkers; do
+  cp "$w/md_final.gro" "$state_dir/$w/conf.gro"
+done
+python3 sketching.py
+rm -rf w*
+cd ../
+iter=2
+
+while [ $iter -le $total_iter ]; do
+  mkdir run$iter
+  cd run$iter
+
+  iters=$((iter-1))
+  collection_dirs=$(realpath ../run$iters/bins)
+  cp ../template/*.cpp ./
+  plumed mklib MetaTensor.cpp     # 生成 MetaTensor.so  (文档示例就是这样) :contentReference[oaicite:4]{index=4}
+  # walker 目录
+  for w in $walkers; do
+    mkdir -p $w
+    cp ../template/plumed_tensor.dat $w/
+    cp ../template/*.mdp $w/
+    cp ../template/*.top $w/
+    cp "$state_dir/$w/conf.gro" $w/conf.gro
+    cp MetaTensor.so $w/
+    # 生成每个 walker 的 modified.dat（注意：绝对路径）
+    sed -e "s|\${1}|$collection_dirs|g" $w/plumed_tensor.dat > $w/modified.dat
+  done
+
+  cp ../template/plumed_rwt_1D.dat ./
+  cp ../template/sketching.py ./
+  cp ../template/MetaTensor.cpp ./   # 如果你是 runtime 编译/检查用
+
+  # grompp / em / grompp（每 walker）
+  for w in $walkers; do
+    ( cd $w && \
+      mpirun -n 1 gmx_mpi grompp -f minim.mdp -c conf.gro -p topol.top -o em.tpr -maxwarn 3 && \
+      mpirun -n 1 gmx_mpi mdrun  -v -deffnm em -plumed modified.dat -ntomp 1 -c em.gro && \
+      mpirun -n 1 gmx_mpi grompp -f md.mdp -c em.gro -p topol.top -o md.tpr  -maxwarn 3)
+  done
+  mpirun  -n 64 gmx_mpi mdrun -multidir $walkers -s md.tpr -plumed modified.dat -ntomp 1 -nsteps 1000000 -c md_final.gro
+  head -n 1 w01/COLVAR > COLVAR
+  for w in $walkers; do
+    f=$(ls -1t "$w"/COLVAR* | head -n 1)
+    awk -v skip="$discard_n" '
+      /^#/ { next }
+      {
+        n++
+        if (n <= skip) next
+        if (seen) print prev
+        prev = $0
+        seen = 1
+      }
+    ' "$f" >> COLVAR
+  done
+  for w in $walkers; do
+    cp "$w/md_final.gro" "$state_dir/$w/conf.gro"
+  done
+  python3 sketching.py
+  rm -rf w*
+  cd ../
+  iter=$((iter+1))
+done
+
+
+
+#sbatch sequence_reweight

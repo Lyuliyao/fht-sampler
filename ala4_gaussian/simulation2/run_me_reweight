@@ -1,0 +1,56 @@
+#!/bin/bash
+## FILENAME:  myjobsubmissionfile
+#
+#SBATCH -A mth210005       # allocation name
+#SBATCH --nodes=1
+#SBATCH -n 8
+#SBATCH --time=48:00:00   # Total run time limit (hh:mm:ss)
+#SBATCH -J myjobname     # Job name
+#SBATCH -p shared     # Queue (partition) name
+#SBATCH --mail-user=useremailaddress
+#SBATCH --mail-type=all   # Send email to above address at begin and end of job
+
+
+
+set -euo pipefail
+
+ml anaconda
+set +u
+source /anvil/scratch/x-lyuliyao/plumed_tensor/plumed-2.9.4/sourceme.sh
+source ~/gromacs-2024.4/bin/GMXRC
+set -u
+
+
+export GMX_MAXBACKUP=-1
+export OMP_NUM_THREADS=1
+
+awk '/^#/{print}' ALL_COLVAR > COLVAR.header
+
+# 例如按“行数累计”：
+nlines=$(awk '!/^#/ && NF>0 {n++} END{print n}' ALL_COLVAR)
+stride=50000
+
+for ((N=stride; N<=nlines; N+=stride)); do
+  sub="COLVAR_lines_${N}"
+
+  cat COLVAR.header > "$sub"
+  awk -v N="$N" '
+    !/^#/ && NF>0 {idx++; if (idx<=N) print}
+  ' ALL_COLVAR >> "$sub"
+
+  export OUTPFX="fes_upto_${N}"
+
+  # 关键：让 PLUMED 永远读 FILE=COLVAR
+  ln -sf "$sub" COLVAR
+
+  echo "Running reweight up to N=$N (link COLVAR -> $sub, prefix=$OUTPFX)" >&2
+  plumed driver --noatoms --plumed plumed_reweight.dat
+  cp ref1.tmp "${OUTPFX}_ref1"
+  cp ref2.tmp "${OUTPFX}_ref2"
+  cp ref3.tmp "${OUTPFX}_ref3"
+  cp ref4.tmp "${OUTPFX}_ref4"
+  cp h1.tmp "${OUTPFX}_h1"
+  cp h2.tmp "${OUTPFX}_h2"
+  cp h3.tmp "${OUTPFX}_h3"
+  cp h4.tmp "${OUTPFX}_h4"
+done

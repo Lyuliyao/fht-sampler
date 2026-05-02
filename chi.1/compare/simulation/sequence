@@ -1,0 +1,59 @@
+#!/bin/bash
+#SBATCH -n 8
+#SBATCH -p RM-shared
+#SBATCH -t 48:00:00
+#SBATCH --array=0-32
+
+
+ml anaconda3
+ml openmpi
+conda activate pytorch
+source /ocean/projects/mth210003p/lyuliyao/plumed/plumed-2.9.4/sourceme.sh
+source ~/gromacs2024.4//bin/GMXRC
+export GMX_MAXBACKUP=-1
+export OMP_NUM_THREADS=1
+
+DEFAULT_WORK_DIR="/ocean/projects/mth210003p/lyuliyao/meta_bias/chi3/compare/simulation"
+if [[ -n "${SLURM_SUBMIT_DIR:-}" && -f "${SLURM_SUBMIT_DIR}/md.mdp" ]]; then
+  WORK_DIR="${SLURM_SUBMIT_DIR}"
+else
+  WORK_DIR="${DEFAULT_WORK_DIR}"
+fi
+cd "${WORK_DIR}"
+
+if [[ ! -f md.mdp || ! -f conf.gro || ! -f topol.top || ! -f plumed.dat ]]; then
+  echo "ERROR: missing one or more required input files in ${WORK_DIR}" >&2
+  echo "Required: md.mdp conf.gro topol.top plumed.dat" >&2
+  exit 1
+fi
+
+TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"
+
+# Keep the original mdp seed as base and offset by array id.
+BASE_SEED="$(awk '/^[[:space:]]*gen-seed[[:space:]]*=/{print $3; exit}' md.mdp)"
+if [[ -z "${BASE_SEED}" ]]; then
+  BASE_SEED=173529
+fi
+SEED=$((BASE_SEED + TASK_ID))
+
+SIM_DIR="$(printf "sim_%03d" "$TASK_ID")"
+mkdir -p "$SIM_DIR"
+
+cp conf.gro topol.top md.mdp plumed.dat "$SIM_DIR"/
+
+# Ensure this task has unique startup velocities and seed.
+awk -v seed="$SEED" '
+  BEGIN {seen_seed=0; seen_vel=0}
+  /^[[:space:]]*gen-seed[[:space:]]*=/ {print "gen-seed                 = " seed; seen_seed=1; next}
+  /^[[:space:]]*gen-vel[[:space:]]*=/  {print "gen-vel                  = yes"; seen_vel=1; next}
+  {print}
+  END{
+    if(!seen_vel)  print "gen-vel                  = yes"
+    if(!seen_seed) print "gen-seed                 = " seed
+  }
+' "$SIM_DIR/md.mdp" > "$SIM_DIR/md_task.mdp"
+
+cd "$SIM_DIR"
+srun -n 1 gmx_mpi grompp -f md_task.mdp -c conf.gro -p topol.top -o md.tpr -po mdout_task.mdp -maxwarn  3
+mpirun -n "${SLURM_NTASKS:-1}" gmx_mpi mdrun -s md.tpr -plumed plumed.dat -ntomp 1 -nsteps 100000000 -noconfout
+echo "Finished task ${TASK_ID} in ${SIM_DIR} with gen-seed=${SEED}"

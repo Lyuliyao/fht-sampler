@@ -1,0 +1,25 @@
+base=$PWD
+out="$base/ALL_COLVAR"
+
+shopt -s nullglob
+files=("$base"/sim_*/COLVAR)
+IFS=$'\n' files=($(printf '%s\n' "${files[@]}" | sort -V))
+unset IFS
+
+if ((${#files[@]} == 0)); then
+  echo "No COLVAR files found under $base/sim_*/COLVAR" >&2
+  exit 1
+fi
+
+: > "$out"
+first=1
+for f in "${files[@]}"; do
+  if ((first)); then
+    cat "$f" >> "$out"          # keep header from first file
+    first=0
+  else
+    awk '!/^#/' "$f" >> "$out"  # drop repeated headers
+  fi
+done
+
+echo "Wrote $out from ${#files[@]} files."

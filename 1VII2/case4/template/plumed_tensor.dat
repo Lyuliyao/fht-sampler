@@ -1,0 +1,101 @@
+# vim:ft=plumed
+LOAD FILE=./MetaTensor.so
+
+# 1) 结构信息（用你 1VII 的 processed.pdb / processed.gro 对应的 pdb）
+MOLINFO STRUCTURE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1VII/case0.5/template/processed.pdb
+
+# 2) 64 个 backbone torsions
+#    phi: 42..73 (32)
+phi42: TORSION ATOMS=@phi-42
+phi43: TORSION ATOMS=@phi-43
+phi44: TORSION ATOMS=@phi-44
+phi45: TORSION ATOMS=@phi-45
+phi46: TORSION ATOMS=@phi-46
+phi47: TORSION ATOMS=@phi-47
+phi48: TORSION ATOMS=@phi-48
+phi49: TORSION ATOMS=@phi-49
+phi50: TORSION ATOMS=@phi-50
+phi51: TORSION ATOMS=@phi-51
+phi52: TORSION ATOMS=@phi-52
+phi53: TORSION ATOMS=@phi-53
+phi54: TORSION ATOMS=@phi-54
+phi55: TORSION ATOMS=@phi-55
+phi56: TORSION ATOMS=@phi-56
+phi57: TORSION ATOMS=@phi-57
+phi58: TORSION ATOMS=@phi-58
+phi59: TORSION ATOMS=@phi-59
+phi60: TORSION ATOMS=@phi-60
+phi61: TORSION ATOMS=@phi-61
+phi62: TORSION ATOMS=@phi-62
+phi63: TORSION ATOMS=@phi-63
+phi64: TORSION ATOMS=@phi-64
+phi65: TORSION ATOMS=@phi-65
+phi66: TORSION ATOMS=@phi-66
+phi67: TORSION ATOMS=@phi-67
+phi68: TORSION ATOMS=@phi-68
+phi69: TORSION ATOMS=@phi-69
+phi70: TORSION ATOMS=@phi-70
+phi71: TORSION ATOMS=@phi-71
+phi72: TORSION ATOMS=@phi-72
+phi73: TORSION ATOMS=@phi-73
+
+#    psi: 41..72 (32)
+psi41: TORSION ATOMS=@psi-41
+psi42: TORSION ATOMS=@psi-42
+psi43: TORSION ATOMS=@psi-43
+psi44: TORSION ATOMS=@psi-44
+psi45: TORSION ATOMS=@psi-45
+psi46: TORSION ATOMS=@psi-46
+psi47: TORSION ATOMS=@psi-47
+psi48: TORSION ATOMS=@psi-48
+psi49: TORSION ATOMS=@psi-49
+psi50: TORSION ATOMS=@psi-50
+psi51: TORSION ATOMS=@psi-51
+psi52: TORSION ATOMS=@psi-52
+psi53: TORSION ATOMS=@psi-53
+psi54: TORSION ATOMS=@psi-54
+psi55: TORSION ATOMS=@psi-55
+psi56: TORSION ATOMS=@psi-56
+psi57: TORSION ATOMS=@psi-57
+psi58: TORSION ATOMS=@psi-58
+psi59: TORSION ATOMS=@psi-59
+psi60: TORSION ATOMS=@psi-60
+psi61: TORSION ATOMS=@psi-61
+psi62: TORSION ATOMS=@psi-62
+psi63: TORSION ATOMS=@psi-63
+psi64: TORSION ATOMS=@psi-64
+psi65: TORSION ATOMS=@psi-65
+psi66: TORSION ATOMS=@psi-66
+psi67: TORSION ATOMS=@psi-67
+psi68: TORSION ATOMS=@psi-68
+psi69: TORSION ATOMS=@psi-69
+psi70: TORSION ATOMS=@psi-70
+psi71: TORSION ATOMS=@psi-71
+psi72: TORSION ATOMS=@psi-72
+
+# 3) groups（你已经有 index.ndx）
+calpha: GROUP NDX_FILE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1VII/case0.5/template/index.ndx NDX_GROUP=CA
+ca41:   GROUP NDX_FILE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1VII/case0.5/template/index.ndx NDX_GROUP=r_41_&_CA
+ca76:   GROUP NDX_FILE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1VII/case0.5/template/index.ndx NDX_GROUP=r_76_&_CA
+
+# 把单原子 group 变成虚拟原子（这样 DISTANCE 一定不报错）
+v41: COM ATOMS=ca41
+v76: COM ATOMS=ca76
+e2e: DISTANCE ATOMS=v41,v76
+
+protein: GROUP ATOMS=@protein
+rg: GYRATION ATOMS=protein
+
+# 4) RMSD（推荐用“只含 CA 的参考 pdb”，且 ATOM 序号必须对应 calpha 的原子序号）
+rmsd_ca: RMSD REFERENCE=/ocean/projects/mth210003p/lyuliyao/meta_bias/chignolin/1VII/case0.5/template/ref_ca.pdb TYPE=OPTIMAL
+
+# 5) MetaTensor bias（ARG 用 64 个 torsions）
+METATENSOR ...
+  LABEL=metad
+  ARG=phi42,phi43,phi44,phi45,phi46,phi47,phi48,phi49,phi50,phi51,phi52,phi53,phi54,phi55,phi56,phi57,phi58,phi59,phi60,phi61,phi62,phi63,phi64,phi65,phi66,phi67,phi68,phi69,phi70,phi71,phi72,phi73,psi41,psi42,psi43,psi44,psi45,psi46,psi47,psi48,psi49,psi50,psi51,psi52,psi53,psi54,psi55,psi56,psi57,psi58,psi59,psi60,psi61,psi62,psi63,psi64,psi65,psi66,psi67,psi68,psi69,psi70,psi71,psi72
+  NUMCOLLECTIONS=1
+  COLLECTIONDIRS=${1}
+  EPS=1 TAU_FACTOR=10 ALPHA=4
+... METATENSOR
+
+PRINT STRIDE=50 ARG=phi42,phi43,phi44,phi45,phi46,phi47,phi48,phi49,phi50,phi51,phi52,phi53,phi54,phi55,phi56,phi57,phi58,phi59,phi60,phi61,phi62,phi63,phi64,phi65,phi66,phi67,phi68,phi69,phi70,phi71,phi72,phi73,psi41,psi42,psi43,psi44,psi45,psi46,psi47,psi48,psi49,psi50,psi51,psi52,psi53,psi54,psi55,psi56,psi57,psi58,psi59,psi60,psi61,psi62,psi63,psi64,psi65,psi66,psi67,psi68,psi69,psi70,psi71,psi72,rg,e2e,rmsd_ca,metad.bias,metad.force2 FILE=COLVAR

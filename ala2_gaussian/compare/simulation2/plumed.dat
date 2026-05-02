@@ -1,0 +1,5 @@
+# vim:ft=plumed
+# since simulation run in subdir, we refer to a file in the parent dir:
+phi1: TORSION ATOMS=5,7,9,15
+psi1: TORSION ATOMS=7,9,15,17
+PRINT STRIDE=200 ARG=phi1,psi1 FILE=COLVAR 

@@ -1,0 +1,19 @@
+# vim:ft=plumed
+# since simulation run in subdir, we refer to a file in the parent dir:
+ome1: TORSION ATOMS=6,1,7,8
+phi1: TORSION ATOMS=1,7,8,11
+psi1: TORSION ATOMS=7,8,11,30
+METAD ...
+  LABEL=metad
+  ARG=ome1
+  PACE=5000
+  HEIGHT=0.0
+  SIGMA=0.35
+  TEMP=300
+  BIASFACTOR=10.0
+  GRID_MIN=-pi
+  GRID_MAX=pi
+  GRID_BIN=80
+  CALC_RCT
+... METAD
+PRINT STRIDE=50 ARG=ome1,phi1,psi1,metad.bias FILE=COLVAR 

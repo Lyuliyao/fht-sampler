@@ -1,0 +1,485 @@
+#!/bin/bash
+#SBATCH -J chignolin20_resume
+#SBATCH -N 1
+#SBATCH --ntasks=36
+#SBATCH -p RM-shared
+#SBATCH -t 24:00:00
+
+set -euo pipefail
+
+if [ -n "${SLURM_SUBMIT_DIR:-}" ]; then
+  CASE_DIR=$(cd "$SLURM_SUBMIT_DIR" && pwd)
+else
+  CASE_DIR=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
+fi
+SCRIPT_PATH="${ORIG_SCRIPT_PATH:-$CASE_DIR/sequence_rerun}"
+SCRIPT_PATH=$(readlink -f "$SCRIPT_PATH")
+TOTAL_ITER="${TOTAL_ITER:-100}"
+NWALKERS="${NWALKERS:-16}"
+DISCARD_N="${DISCARD_N:-10}"
+MD_MPI_RANKS="${MD_MPI_RANKS:-32}"
+SUBJOB_NTASKS="${SUBJOB_NTASKS:-32}"
+SUBJOB_PARTITION="${SUBJOB_PARTITION:-RM-shared}"
+SUBJOB_TIME="${SUBJOB_TIME:-4:00:00}"
+MD_MAXH="${MD_MAXH:-3.8}"
+AUTO_CHAIN="${AUTO_CHAIN:-1}"
+
+walkers=$(seq -f "w%02g" 1 "$NWALKERS")
+merge_walkers=""
+state_dir="$CASE_DIR/state"
+LAST_BINS_DIR=""
+PYTHON_BIN=""
+
+resolve_python_bin() {
+  local candidate
+
+  for candidate in \
+    /jet/home/lyuliyao/.conda/envs/pytorch/bin/python3 \
+    /jet/home/lyuliyao/.conda/envs/pytorch/bin/python \
+    "$(command -v python3 2>/dev/null || true)"; do
+    [ -n "$candidate" ] || continue
+    [ -x "$candidate" ] || continue
+    PYTHON_BIN="$candidate"
+    return 0
+  done
+
+  echo "[ERROR] No usable python interpreter found for sketching.py." >&2
+  return 1
+}
+
+ensure_system_path() {
+  local fallback_path="/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+
+  case ":${PATH:-}:" in
+    *:/usr/bin:*) ;;
+    *) PATH="${PATH:+$PATH:}$fallback_path" ;;
+  esac
+
+  export PATH
+}
+
+load_env() {
+  set +u
+  [ -f /etc/profile.d/modules.sh ] && source /etc/profile.d/modules.sh
+  ensure_system_path
+  module load anaconda3 openmpi
+  source /ocean/projects/mth210003p/lyuliyao/plumed/plumed-2.9.4/sourceme.sh
+  source ~/gromacs2024.4/bin/GMXRC
+  set -u
+  resolve_python_bin
+  export GMX_MAXBACKUP=-1
+  export OMP_NUM_THREADS=1
+  unset OMPI_MCA_rmaps_base_mapping_policy
+  unset OMPI_MCA_rmaps_default_mapping_policy
+  unset SLURM_MPI_TYPE
+}
+
+merge_plumed_colvar() {
+  local prefix="$1"
+  local out="$2"
+  local first=""
+  local w
+  local f
+
+  rm -f "$out"
+
+  for w in $merge_walkers; do
+    first=$(ls -1t "$w"/"${prefix}"* 2>/dev/null | head -n 1 || true)
+    [ -n "$first" ] && break
+  done
+
+  if [ -z "$first" ]; then
+    echo "[WARN] No ${prefix} files found from available walkers; skip merge for $out."
+    return 0
+  fi
+
+  grep '^#!' "$first" > "$out" || true
+  head -n 1 "$first" | grep '^#' >> "$out" || true
+
+  for w in $merge_walkers; do
+    f=$(ls -1t "$w"/"${prefix}"* 2>/dev/null | head -n 1 || true)
+    if [ -z "$f" ]; then
+      echo "[WARN] $w missing ${prefix}*, skip."
+      continue
+    fi
+
+    awk -v skip="$DISCARD_N" -v src="$f" '
+      /^#/ { next }
+      {
+        if (expected_cols == 0) expected_cols = NF
+        if (NF != expected_cols) {
+          bad++
+          next
+        }
+        n++
+        if (n <= skip) next
+        if (seen) print prev
+        prev = $0
+        seen = 1
+      }
+      END {
+        if (bad > 0) {
+          printf "[WARN] %s dropped %d malformed rows (expected %d columns).\n", src, bad, expected_cols > "/dev/stderr"
+        }
+      }
+    ' "$f" >> "$out"
+  done
+}
+
+refresh_merge_walkers() {
+  local prefix="$1"
+  local w
+  local f
+
+  merge_walkers=""
+  for w in $walkers; do
+    f=$(ls -1t "$w"/"${prefix}"* 2>/dev/null | head -n 1 || true)
+    [ -n "$f" ] && merge_walkers="$merge_walkers $w"
+  done
+}
+
+find_highest_run() {
+  local d
+  local base
+  local num
+  local max=0
+
+  shopt -s nullglob
+  for d in "$CASE_DIR"/run*; do
+    [ -d "$d" ] || continue
+    base=$(basename "$d")
+    num=${base#run}
+    [[ "$num" =~ ^[0-9]+$ ]] || continue
+    if (( num > max )); then
+      max=$num
+    fi
+  done
+  shopt -u nullglob
+
+  echo "$max"
+}
+
+find_last_complete_bins_before() {
+  local limit="$1"
+  local i
+  for ((i = limit - 1; i >= 1; --i)); do
+    if [ -d "$CASE_DIR/run$i/bins" ]; then
+      realpath "$CASE_DIR/run$i/bins"
+      return 0
+    fi
+  done
+  return 1
+}
+
+init_state() {
+  local w
+  mkdir -p "$state_dir"
+  for w in $walkers; do
+    mkdir -p "$state_dir/$w"
+    if [ ! -f "$state_dir/$w/conf.gro" ]; then
+      cp "$CASE_DIR/template/conf.gro" "$state_dir/$w/conf.gro"
+    fi
+  done
+}
+
+copy_walker_inputs() {
+  local walker_dir="$1"
+  local source_conf="$2"
+  local f
+  local base
+
+  mkdir -p "$walker_dir"
+
+  for f in "$CASE_DIR"/template/*.mdp "$CASE_DIR"/template/*.top; do
+    base=$(basename "$f")
+    if [ ! -f "$walker_dir/$base" ]; then
+      cp "$f" "$walker_dir/$base"
+    fi
+  done
+
+  if [ ! -f "$walker_dir/conf.gro" ]; then
+    cp "$source_conf" "$walker_dir/conf.gro"
+  fi
+}
+
+prepare_run1() {
+  local run_dir="$CASE_DIR/run1"
+  local w
+
+  mkdir -p "$run_dir/.status"
+  if [ ! -f "$run_dir/sketching.py" ]; then
+    cp "$CASE_DIR/template/sketching.py" "$run_dir/sketching.py"
+  fi
+
+  for w in $walkers; do
+    copy_walker_inputs "$run_dir/$w" "$state_dir/$w/conf.gro"
+    if [ ! -f "$run_dir/$w/plumed.dat" ]; then
+      cp "$CASE_DIR/template/plumed_init.dat" "$run_dir/$w/plumed.dat"
+    fi
+  done
+}
+
+prepare_run_iter() {
+  local iter="$1"
+  local run_dir="$CASE_DIR/run$iter"
+  local prev_iter
+  local collection_dirs
+  local w
+
+  mkdir -p "$run_dir/.status"
+
+  if [ "$iter" -eq 1 ]; then
+    prepare_run1
+    return 0
+  fi
+
+  prev_iter=$((iter - 1))
+  if [ -d "$CASE_DIR/run$prev_iter/bins" ]; then
+    collection_dirs=$(realpath "$CASE_DIR/run$prev_iter/bins")
+  elif [ -n "$LAST_BINS_DIR" ] && [ -d "$LAST_BINS_DIR" ]; then
+    collection_dirs="$LAST_BINS_DIR"
+    echo "[WARN] run$prev_iter/bins not found, fallback to $collection_dirs."
+  else
+    echo "[ERROR] No bins available before run$iter; cannot build modified.dat." >&2
+    return 1
+  fi
+
+  if [ ! -f "$run_dir/sketching.py" ]; then
+    cp "$CASE_DIR/template/sketching.py" "$run_dir/sketching.py"
+  fi
+  if [ ! -f "$run_dir/MetaTensor.cpp" ]; then
+    cp "$CASE_DIR/template/MetaTensor.cpp" "$run_dir/MetaTensor.cpp"
+  fi
+  if [ ! -f "$run_dir/MetaTensor.so" ]; then
+    (
+      cd "$run_dir"
+      plumed mklib MetaTensor.cpp
+    )
+  fi
+
+  for w in $walkers; do
+    copy_walker_inputs "$run_dir/$w" "$state_dir/$w/conf.gro"
+    if [ ! -f "$run_dir/$w/plumed_tensor.dat" ]; then
+      cp "$CASE_DIR/template/plumed_tensor.dat" "$run_dir/$w/plumed_tensor.dat"
+    fi
+    if [ ! -f "$run_dir/$w/MetaTensor.so" ]; then
+      cp "$run_dir/MetaTensor.so" "$run_dir/$w/MetaTensor.so"
+    fi
+    sed -e "s|\${1}|$collection_dirs|g" "$run_dir/$w/plumed_tensor.dat" > "$run_dir/$w/modified.dat"
+  done
+}
+
+submit_walker_jobs() {
+  local iter="$1"
+  local run_dir="$CASE_DIR/run$iter"
+  local stage="run${iter}_all"
+  local plumed_file
+  local em_plumed_flag
+  local w
+  local job_script
+  local pending
+  local submit_walkers=""
+
+  if [ "$iter" -eq 1 ]; then
+    plumed_file="plumed.dat"
+    em_plumed_flag=""
+  else
+    plumed_file="modified.dat"
+    em_plumed_flag="-plumed modified.dat"
+  fi
+
+  cd "$run_dir"
+
+  for w in $walkers; do
+    if [ -f "$w/md_final.gro" ]; then
+      echo "[INFO] run$iter/$w already has md_final.gro; skip submit."
+      continue
+    fi
+    submit_walkers="$submit_walkers $w"
+  done
+
+  if [ -z "$submit_walkers" ]; then
+    echo "[INFO] run$iter has no unfinished walkers."
+    return 0
+  fi
+
+  for w in $submit_walkers; do
+    rm -f ".status/${stage}.${w}.ok" ".status/${stage}.${w}.fail" ".status/${stage}.${w}.sbatch"
+    job_script=".status/${stage}.${w}.sbatch"
+
+    cat > "$job_script" <<'EOF'
+#!/bin/bash
+#SBATCH -N 1
+#SBATCH --ntasks=__SUBJOB_NTASKS__
+#SBATCH -p __SUBJOB_PARTITION__
+#SBATCH -t __SUBJOB_TIME__
+
+set -euo pipefail
+trap 'touch "__RUN_DIR__/.status/__STAGE__.__WALKER__.fail"' ERR
+
+[ -f /etc/profile.d/modules.sh ] && { set +u; source /etc/profile.d/modules.sh; set -u; }
+set +u
+PATH="${PATH:+$PATH:}/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
+export PATH
+module load anaconda3 openmpi
+source /ocean/projects/mth210003p/lyuliyao/plumed/plumed-2.9.4/sourceme.sh
+source ~/gromacs2024.4/bin/GMXRC
+set -u
+export GMX_MAXBACKUP=-1
+export OMP_NUM_THREADS=1
+unset OMPI_MCA_rmaps_base_mapping_policy
+unset OMPI_MCA_rmaps_default_mapping_policy
+unset SLURM_MPI_TYPE
+
+cd "__RUN_DIR__/__WALKER__" || exit 1
+
+if [ -f md_final.gro ]; then
+  echo "[INFO] __WALKER__ already has md_final.gro; nothing to do."
+elif [ -f md.cpt ] && [ -f md.tpr ]; then
+  mpirun -np __MD_MPI_RANKS__ --map-by slot --bind-to core \
+    gmx_mpi mdrun -v -deffnm md -s md.tpr -plumed __PLUMED_FILE__ \
+    -ntomp 1 -cpi md.cpt -append -cpt 15 -maxh __MD_MAXH__ -c md_final.gro
+elif [ -f em.gro ]; then
+  gmx_mpi grompp -f md.mdp -c em.gro -p topol.top -o md.tpr -maxwarn 3
+  mpirun -np __MD_MPI_RANKS__ --map-by slot --bind-to core \
+    gmx_mpi mdrun -v -deffnm md -s md.tpr -plumed __PLUMED_FILE__ \
+    -ntomp 1 -nsteps 500000 -cpt 15 -maxh __MD_MAXH__ -c md_final.gro
+else
+  #gmx_mpi grompp -f minim.mdp -c conf.gro -p topol.top -o em.tpr -maxwarn 3
+  #mpirun -np 1 --map-by slot --bind-to core \
+  #  gmx_mpi mdrun -v -deffnm em __EM_PLUMED_FLAG__ -ntomp 1 -c em.gro
+  gmx_mpi grompp -f md.mdp -c conf.gro -p topol.top -o md.tpr -maxwarn 3
+  mpirun -np __MD_MPI_RANKS__ --map-by slot --bind-to core \
+    gmx_mpi mdrun -v -deffnm md -s md.tpr -plumed __PLUMED_FILE__ \
+    -ntomp 1 -nsteps 500000 -cpt 15 -maxh __MD_MAXH__ -c md_final.gro
+fi
+printf "0\n" | gmx_mpi trjconv -s md.tpr -f md.xtc -o md_noPBC.xtc -pbc nojump
+printf "1\n0" | gmx_mpi trjconv -s md.tpr -f md_noPBC.xtc -o md_center.xtc -pbc mol -center
+for f in COLVAR COLVAR_ref; do
+  [ -f "$f" ] || continue
+  sed -i '$d' "$f" || true
+done
+
+touch "__RUN_DIR__/.status/__STAGE__.__WALKER__.ok"
+rm -f "__RUN_DIR__/.status/__STAGE__.__WALKER__.fail"
+EOF
+
+    sed -i \
+      -e "s|__SUBJOB_NTASKS__|$SUBJOB_NTASKS|g" \
+      -e "s|__SUBJOB_PARTITION__|$SUBJOB_PARTITION|g" \
+      -e "s|__SUBJOB_TIME__|$SUBJOB_TIME|g" \
+      -e "s|__RUN_DIR__|$run_dir|g" \
+      -e "s|__STAGE__|$stage|g" \
+      -e "s|__WALKER__|$w|g" \
+      -e "s|__PLUMED_FILE__|$plumed_file|g" \
+      -e "s|__EM_PLUMED_FLAG__|$em_plumed_flag|g" \
+      -e "s|__MD_MPI_RANKS__|$MD_MPI_RANKS|g" \
+      -e "s|__MD_MAXH__|$MD_MAXH|g" \
+      "$job_script"
+
+    sbatch --parsable "$job_script" >/dev/null 2>&1 || touch ".status/${stage}.${w}.fail"
+  done
+
+  while :; do
+    pending=0
+    for w in $submit_walkers; do
+      if [ ! -f ".status/${stage}.${w}.ok" ] && [ ! -f ".status/${stage}.${w}.fail" ]; then
+        pending=$((pending + 1))
+      fi
+    done
+    [ "$pending" -eq 0 ] && break
+    sleep 20
+  done
+
+  for w in $submit_walkers; do
+    if [ -f ".status/${stage}.${w}.ok" ]; then
+      echo "[INFO] run$iter/$w finished successfully."
+    else
+      echo "[WARN] run$iter/$w failed; next iteration will reuse its last saved state."
+    fi
+  done
+}
+
+finalize_run() {
+  local iter="$1"
+  local run_dir="$CASE_DIR/run$iter"
+  local w
+
+  cd "$run_dir"
+  refresh_merge_walkers "COLVAR"
+
+  if [ -z "$merge_walkers" ]; then
+    echo "[ERROR] No COLVAR walkers are available in run$iter; stopping before auto-resubmit." >&2
+    return 1
+  fi
+
+  for w in $merge_walkers; do
+    if [ -f "$w/md_final.gro" ]; then
+      cp "$w/md_final.gro" "$state_dir/$w/conf.gro"
+    fi
+  done
+
+  rm -f COLVAR COLVAR_ref
+  merge_plumed_colvar COLVAR COLVAR
+  merge_plumed_colvar COLVAR_ref COLVAR_ref
+  "$PYTHON_BIN" sketching.py
+
+  if [ ! -d bins ]; then
+    echo "[ERROR] run$iter did not produce bins; stopping before auto-resubmit." >&2
+    return 1
+  fi
+
+  LAST_BINS_DIR=$(realpath ./bins)
+  echo "[INFO] run$iter finalized. bins -> $LAST_BINS_DIR"
+}
+
+main() {
+  local highest_run
+  local target_iter
+  local next_job
+
+  load_env
+  cd "$CASE_DIR"
+  init_state
+
+  highest_run=$(find_highest_run)
+  if [ "$highest_run" -eq 0 ]; then
+    echo "[INFO] No existing run directories found; bootstrapping run1."
+    target_iter=1
+  elif [ -d "$CASE_DIR/run$highest_run/bins" ]; then
+    target_iter=$((highest_run + 1))
+  else
+    target_iter=$highest_run
+  fi
+
+  if [ "$target_iter" -gt "$TOTAL_ITER" ]; then
+    echo "[INFO] All runs through run$TOTAL_ITER are already present."
+    return 0
+  fi
+
+  LAST_BINS_DIR="$(find_last_complete_bins_before "$target_iter" || true)"
+
+  echo "[INFO] Highest existing run: run$highest_run"
+  echo "[INFO] Target run for this job: run$target_iter"
+  if [ -n "$LAST_BINS_DIR" ]; then
+    echo "[INFO] Last completed bins dir: $LAST_BINS_DIR"
+  fi
+
+  prepare_run_iter "$target_iter"
+  submit_walker_jobs "$target_iter"
+  finalize_run "$target_iter"
+
+  if [ "$AUTO_CHAIN" = "1" ] && [ "$target_iter" -lt "$TOTAL_ITER" ] && [ -n "${SLURM_JOB_ID:-}" ]; then
+    cd "$CASE_DIR"
+    next_job=$(sbatch --parsable \
+      --chdir="$CASE_DIR" \
+      --dependency=afterok:"$SLURM_JOB_ID" \
+      --export=TOTAL_ITER="$TOTAL_ITER",NWALKERS="$NWALKERS",DISCARD_N="$DISCARD_N",MD_MPI_RANKS="$MD_MPI_RANKS",SUBJOB_NTASKS="$SUBJOB_NTASKS",SUBJOB_PARTITION="$SUBJOB_PARTITION",SUBJOB_TIME="$SUBJOB_TIME",MD_MAXH="$MD_MAXH",AUTO_CHAIN="$AUTO_CHAIN",ORIG_SCRIPT_PATH="$SCRIPT_PATH" \
+      "$SCRIPT_PATH")
+    echo "[INFO] Queued continuation job $next_job after job $SLURM_JOB_ID."
+  else
+    echo "[INFO] Auto chaining disabled, total_iter reached, or not running under Slurm."
+  fi
+}
+
+main "$@"

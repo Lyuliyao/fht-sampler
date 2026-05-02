@@ -1,0 +1,59 @@
+#!/bin/bash
+## FILENAME:  myjobsubmissionfile
+#
+#SBATCH -A mth210005       # allocation name
+#SBATCH -n 8
+#SBATCH --time=48:00:00   # Total run time limit (hh:mm:ss)
+#SBATCH -J myjobname     # Job name
+#SBATCH -p shared     # Queue (partition) name
+#SBATCH --array=1-32
+#SBATCH --mail-user=useremailaddress
+#SBATCH --mail-type=all   # Send email to above address at begin and end of job
+
+
+
+ml anaconda
+source /anvil/scratch/x-lyuliyao/plumed_tensor/plumed-2.9.4/sourceme.sh
+source ~/gromacs-2024.4/bin/GMXRC
+conda activate pytorch
+
+
+export GMX_MAXBACKUP=-1
+export OMP_NUM_THREADS=1
+
+total_iter=20
+nwalkers=32
+if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
+  echo "SLURM_ARRAY_TASK_ID is not set. Submit with: sbatch sequence"
+  exit 1
+fi
+
+w_id=${SLURM_ARRAY_TASK_ID}
+if (( w_id < 1 || w_id > nwalkers )); then
+  echo "SLURM_ARRAY_TASK_ID=${w_id} is out of range 1-${nwalkers}"
+  exit 1
+fi
+w=$(printf "w%02d" "${w_id}")
+md_mpi_ranks=${SLURM_NTASKS:-1}
+
+mkdir -p "${w}"
+cp ../template/plumed_tensor.dat "${w}/"
+cp ../template/*.mdp "${w}/"
+cp ../template/*.top "${w}/"
+cp ../template/*.gro "${w}/"
+cp modified.dat "${w}/"
+cp ../template/sketching.py ./
+cp MetaTensor.cpp "${w}/"
+
+if [[ -f MetaTensor.so ]]; then
+  cp MetaTensor.so "${w}/"
+else
+  plumed mklib ./MetaTensor.cpp
+  cp MetaTensor.so "${w}/"
+fi
+
+( cd "${w}" && \
+  srun -n 1 gmx_mpi grompp -f minim.mdp -c conf.gro -p topol.top -o em.tpr && \
+  srun -n 1 gmx_mpi mdrun  -v -deffnm em -plumed modified.dat -ntomp "${OMP_NUM_THREADS}" -c em.gro && \
+  srun -n 1 gmx_mpi grompp -f md.mdp -c em.gro -p topol.top -o md.tpr  -maxwarn 3 && \
+  srun -n "${md_mpi_ranks}" gmx_mpi mdrun -deffnm md -plumed modified.dat -ntomp "${OMP_NUM_THREADS}" -rdd 1.4 -dlb no -nsteps 100000000 )
