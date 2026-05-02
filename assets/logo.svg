@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="FHT-Sampler logo">
+  <title>FHT-Sampler</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="ridge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.0"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- rounded background -->
+  <rect x="0" y="0" width="256" height="256" rx="40" ry="40" fill="url(#bg)"/>
+
+  <!-- free-energy landscape (double well) -->
+  <path d="M 24 188
+           C 60 188, 70 120, 96 120
+           C 122 120, 132 196, 158 196
+           C 184 196, 196 132, 232 132"
+        fill="none" stroke="url(#ridge)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 24 200
+           C 60 200, 70 132, 96 132
+           C 122 132, 132 208, 158 208
+           C 184 208, 196 144, 232 144"
+        fill="none" stroke="#38bdf8" stroke-opacity="0.18" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- tensor-network chain: nodes with dangling (physical) legs -->
+  <g stroke="#e2e8f0" stroke-width="4" stroke-linecap="round">
+    <!-- horizontal bond legs between tensors -->
+    <line x1="56"  y1="96" x2="96"  y2="96"/>
+    <line x1="96"  y1="96" x2="160" y2="96"/>
+    <line x1="160" y1="96" x2="200" y2="96"/>
+    <!-- physical legs (down to landscape) -->
+    <line x1="56"  y1="96" x2="56"  y2="60"/>
+    <line x1="96"  y1="96" x2="96"  y2="60"/>
+    <line x1="160" y1="96" x2="160" y2="60"/>
+    <line x1="200" y1="96" x2="200" y2="60"/>
+  </g>
+
+  <!-- tensor nodes -->
+  <g>
+    <circle cx="56"  cy="96" r="14" fill="#38bdf8"/>
+    <circle cx="96"  cy="96" r="14" fill="#22d3ee"/>
+    <circle cx="160" cy="96" r="14" fill="#a78bfa"/>
+    <circle cx="200" cy="96" r="14" fill="#f472b6"/>
+  </g>
+
+  <!-- center dot on each node -->
+  <g fill="#0f172a">
+    <circle cx="56"  cy="96" r="4"/>
+    <circle cx="96"  cy="96" r="4"/>
+    <circle cx="160" cy="96" r="4"/>
+    <circle cx="200" cy="96" r="4"/>
+  </g>
+</svg>

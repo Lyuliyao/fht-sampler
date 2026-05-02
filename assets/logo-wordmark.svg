@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 200" role="img" aria-label="FHT-Sampler">
+  <title>FHT-Sampler</title>
+  <defs>
+    <linearGradient id="ridge2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.0"/>
+      <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- mark on the left -->
+  <g transform="translate(8,8)">
+    <!-- landscape -->
+    <path d="M 0 150
+             C 28 150, 36 96, 56 96
+             C 76 96, 84 156, 104 156
+             C 124 156, 132 104, 160 104"
+          fill="none" stroke="url(#ridge2)" stroke-width="3" stroke-linecap="round"/>
+    <!-- tensor chain -->
+    <g stroke="#0f172a" stroke-width="3.5" stroke-linecap="round">
+      <line x1="24"  y1="76" x2="56"  y2="76"/>
+      <line x1="56"  y1="76" x2="104" y2="76"/>
+      <line x1="104" y1="76" x2="144" y2="76"/>
+      <line x1="24"  y1="76" x2="24"  y2="46"/>
+      <line x1="56"  y1="76" x2="56"  y2="46"/>
+      <line x1="104" y1="76" x2="104" y2="46"/>
+      <line x1="144" y1="76" x2="144" y2="46"/>
+    </g>
+    <g>
+      <circle cx="24"  cy="76" r="11" fill="#38bdf8"/>
+      <circle cx="56"  cy="76" r="11" fill="#22d3ee"/>
+      <circle cx="104" cy="76" r="11" fill="#a78bfa"/>
+      <circle cx="144" cy="76" r="11" fill="#f472b6"/>
+    </g>
+    <g fill="#0f172a">
+      <circle cx="24"  cy="76" r="3"/>
+      <circle cx="56"  cy="76" r="3"/>
+      <circle cx="104" cy="76" r="3"/>
+      <circle cx="144" cy="76" r="3"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <g font-family="ui-sans-serif, -apple-system, 'Helvetica Neue', Arial, sans-serif"
+     font-weight="700" fill="#0f172a">
+    <text x="200" y="118" font-size="64" letter-spacing="-1.5">
+      <tspan fill="#0ea5e9">FHT</tspan><tspan fill="#0f172a">-Sampler</tspan>
+    </text>
+    <text x="202" y="152" font-size="18" font-weight="500" fill="#475569" letter-spacing="0.5">
+      functional hierarchical tensor density for high-dimensional enhanced sampling
+    </text>
+  </g>
+</svg>

@@ -1,21 +1,38 @@
-# MetaTensor
+<p align="center">
+  <img src="assets/logo-wordmark.svg" alt="FHT-Sampler" width="520">
+</p>
 
-Code, input templates, and analysis notebooks accompanying our work on
-**MetaTensor**, a tensor-network–based collective variable for enhanced
-sampling of molecular systems with [PLUMED](https://www.plumed.org/) and
-[GROMACS](https://www.gromacs.org/).
+# FHT-Sampler
 
-The repository collects everything needed to read, understand, and reproduce
-the figures of the paper across a range of benchmark systems — from a 2D toy
-potential to small peptides and folded mini-proteins.
+Reference implementation, input templates, and analysis notebooks for
+
+> **High-Dimensional Enhanced Sampling via Regularized Path-Dependent
+> McKean–Vlasov Dynamics using Tensor Density Approximation.**
+> Liyao Lyu, Siyu Guo, Huan Lei. *Preprint, 2026.*
+
+**FHT-Sampler** is an adaptive-biasing scheme for sampling high-dimensional
+Gibbs measures with rugged free-energy landscapes. It approximates the
+collective-variable (CV) marginal density using a **functional hierarchical
+tensor (FHT)** representation, and drives the dynamics with a **regularized,
+path-dependent McKean–Vlasov drift** built from a history-weighted measure.
+The combination is optimization-free, finite-walker stable, and demonstrated
+on CV spaces of dimension up to 64.
+
+The method is implemented as a custom collective variable on top of
+[PLUMED](https://www.plumed.org/) and run with
+[GROMACS](https://www.gromacs.org/). This repository collects everything
+needed to read, understand, and reproduce the paper's figures across a range
+of benchmarks — from a 2D toy potential to small peptides and folded
+mini-proteins.
 
 ## What's in here
 
-The custom PLUMED collective variable lives in each system's
-`template/MetaTensor.cpp`, together with the matching `plumed_*.dat` input
-files and a small `sketching.py` helper used to build the tensor sketch.
-Per-system driver scripts (`sequence`, `sequence_rerun`, `collect_data`) wrap
-the GROMACS + PLUMED runs and post-processing.
+The custom PLUMED action lives in each system's `template/MetaTensor.cpp`
+(legacy filename — registers the FHT-Sampler bias inside PLUMED), together
+with the matching `plumed_*.dat` input files and a `sketching.py` helper
+that constructs the FHT density sketch. Per-system driver scripts
+(`sequence`, `sequence_rerun`, `collect_data`) wrap the GROMACS + PLUMED
+runs and post-processing.
 
 ### Benchmark systems
 
@@ -107,8 +124,22 @@ without re-running, please contact the authors.
 
 ## Citation
 
-If you use this code or build on the MetaTensor CV, please cite the
-accompanying paper. *(BibTeX entry to be added on publication.)*
+A preprint describing the method is in preparation; if you use this code,
+please cite it as:
+
+```bibtex
+@unpublished{LyuGuoLei2026FHTSampler,
+  author = {Lyu, Liyao and Guo, Siyu and Lei, Huan},
+  title  = {High-Dimensional Enhanced Sampling via Regularized
+            Path-Dependent McKean--Vlasov Dynamics using Tensor
+            Density Approximation},
+  note   = {Preprint, 2026},
+  year   = {2026}
+}
+```
+
+*(This entry will be updated with arXiv ID / DOI once the preprint is
+posted, and replaced with an `@article` entry on publication.)*
 
 ## License
 
