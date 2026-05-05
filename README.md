@@ -25,6 +25,17 @@ needed to read, understand, and reproduce the paper's figures across a range
 of benchmarks — from a 2D toy potential to small peptides and folded
 mini-proteins.
 
+<p align="center">
+  <img src="assets/chignolin_fold.gif" alt="Chignolin folding" width="46%">
+  &nbsp;&nbsp;
+  <img src="assets/villin_fold.gif" alt="Villin folding" width="46%">
+  <br>
+  <sub><b>Left:</b> Chignolin (PDB 1UAO) folding event sampled by FHT-Sampler
+  (16-dim φ/ψ CV space). &nbsp;
+  <b>Right:</b> Villin headpiece (PDB 1VII) folding into its three-helix
+  bundle. Both rendered from biased trajectories generated with this code.</sub>
+</p>
+
 ## What's in here
 
 The custom PLUMED action lives in each system's `template/MetaTensor.cpp`
