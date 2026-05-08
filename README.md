@@ -1,11 +1,21 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-    <img src="assets/readme-banner.svg" alt="FHT-Sampler" width="720">
+    <img src="assets/logo.svg" alt="FHT-Sampler" width="160">
   </picture>
 </p>
 
-# FHT-Sampler
+<h1 align="center">FHT&#8209;Sampler</h1>
+
+<p align="center">
+  <em>Functional&nbsp;Hierarchical&nbsp;Tensor &mdash; enhanced sampling for high-dimensional molecular dynamics.</em>
+</p>
+
+<p align="center">
+  <a href="#dependencies"><img alt="status" src="https://img.shields.io/badge/status-research-1f6f6a?style=flat-square"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache--2.0-0f1620?style=flat-square"></a>
+  <img alt="python" src="https://img.shields.io/badge/python-3.10%2B-c2502b?style=flat-square">
+</p>
 
 Reference implementation, input templates, and analysis notebooks for
 
