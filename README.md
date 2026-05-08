@@ -8,7 +8,8 @@ Reference implementation, input templates, and analysis notebooks for
 
 > **High-Dimensional Enhanced Sampling via Regularized Path-Dependent
 > McKean–Vlasov Dynamics using Tensor Density Approximation.**
-> Liyao Lyu, Siyu Guo, Huan Lei. *Preprint, 2026.*
+> Liyao Lyu, Siyu Guo, Huan Lei.
+> [arXiv:2605.03080](https://arxiv.org/abs/2605.03080), 2026.
 
 **FHT-Sampler** is an adaptive-biasing scheme for sampling high-dimensional
 Gibbs measures with rugged free-energy landscapes. It approximates the
@@ -135,22 +136,22 @@ without re-running, please contact the authors.
 
 ## Citation
 
-A preprint describing the method is in preparation; if you use this code,
-please cite it as:
+If you use this code, please cite the preprint:
 
 ```bibtex
-@unpublished{LyuGuoLei2026FHTSampler,
-  author = {Lyu, Liyao and Guo, Siyu and Lei, Huan},
-  title  = {High-Dimensional Enhanced Sampling via Regularized
-            Path-Dependent McKean--Vlasov Dynamics using Tensor
-            Density Approximation},
-  note   = {Preprint, 2026},
-  year   = {2026}
+@article{LyuGuoLei2026FHTSampler,
+  author  = {Lyu, Liyao and Guo, Siyu and Lei, Huan},
+  title   = {High-Dimensional Enhanced Sampling via Regularized
+             Path-Dependent McKean--Vlasov Dynamics using Tensor
+             Density Approximation},
+  journal = {arXiv preprint arXiv:2605.03080},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/2605.03080}
 }
 ```
 
-*(This entry will be updated with arXiv ID / DOI once the preprint is
-posted, and replaced with an `@article` entry on publication.)*
+*(This entry will be replaced with an `@article` entry on journal
+publication.)*
 
 ## License
 
