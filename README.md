@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/logo-wordmark.svg" alt="FHT-Sampler" width="520">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/readme-banner.svg" alt="FHT-Sampler" width="720">
+  </picture>
 </p>
 
 # FHT-Sampler
